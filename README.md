@@ -218,4 +218,7 @@ More: [docs/troubleshooting.md](docs/troubleshooting.md).
 
 ## License
 
-Same as SMCP / your project. This repository does not add a separate license file; default to [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0) if not specified by the parent project.
+This project uses dual licensing:
+
+- **Code** (Python source, scripts, config used to run the program): **[GNU Affero General Public License v3.0 (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0)** — see [LICENSE](LICENSE). You may use, modify, and distribute the code under the terms of the AGPLv3; if you run a modified version as a network server, you must offer the corresponding source to users.
+- **Documentation and other non-code material** (README, docs/, and any other prose or media that is not executable source): **[Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)](https://creativecommons.org/licenses/by-sa/4.0/)** — see [LICENSE-DOCS](LICENSE-DOCS). You may share and adapt under attribution and share-alike terms.

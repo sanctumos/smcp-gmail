@@ -3,6 +3,12 @@ Gmail API client for smcp-gmail plugin.
 
 Uses google-api-python-client with OAuth2 credentials.
 Credentials: credentials.json (client secrets), token.json (stored after first auth).
+
+Copyright (C) 2025 Contributors to the smcp-gmail project.
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version. See LICENSE in the project root.
 """
 import base64
 import os

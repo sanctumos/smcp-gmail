@@ -3,6 +3,12 @@
 smcp-gmail – Gmail API plugin for SMCP (Model Context Protocol).
 
 Exposes Gmail operations as MCP tools: list messages, get message, send, list labels.
+
+Copyright (C) 2025 Contributors to the smcp-gmail project.
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU Affero General Public License as published by the Free
+Software Foundation, either version 3 of the License, or (at your option)
+any later version. See LICENSE in the project root.
 """
 
 import argparse

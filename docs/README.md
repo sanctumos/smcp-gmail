@@ -1,5 +1,7 @@
 # smcp-gmail documentation
 
+Documentation in this directory is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). See [LICENSE-DOCS](../LICENSE-DOCS) in the project root.
+
 | Document | Description |
 |----------|-------------|
 | [installation.md](installation.md) | Step-by-step installation and Google Cloud (Gmail API, OAuth, credentials) setup. |
