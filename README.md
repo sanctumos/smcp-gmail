@@ -1,84 +1,221 @@
 # smcp-gmail
 
-Gmail API plugin for [SMCP](https://github.com/sanctumos/smcp) (Model Context Protocol). Exposes Gmail operations as MCP tools so AI clients can list messages, read, send, and list labels.
+**Gmail API plugin for [SMCP](https://github.com/sanctumos/smcp)** (Model Context Protocol). Exposes Gmail as MCP tools so AI clients can list messages, read, send, and manage labels—without writing Gmail API code.
 
-## Setup
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
-1. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+---
 
-2. **Google Cloud / Gmail API**
-   - Create a [Google Cloud project](https://console.cloud.google.com/) and enable the [Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
-   - Configure the OAuth consent screen and create an **OAuth 2.0 Client ID** (Desktop app).
-   - Download the client secrets and save as `credentials.json` in this plugin directory (or set `GMAIL_CREDENTIALS_FILE`).
+## Table of contents
 
-3. **First run**
-   - Run any command (e.g. `python cli.py list-labels`). The first time you’ll be prompted to sign in in the browser; credentials are stored in `token.json` (or path in `GMAIL_TOKEN_FILE`).
+- [Features](#features)
+- [Quick start](#quick-start)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Configuration](#configuration)
+- [Usage](#usage)
+  - [As an SMCP plugin](#as-an-smcp-plugin)
+  - [Standalone CLI](#standalone-cli)
+- [Commands reference](#commands-reference)
+- [Testing](#testing)
+- [Documentation](#documentation)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
-## Use as SMCP plugin
+---
 
-Copy or symlink this directory into SMCP’s plugins directory:
+## Features
+
+- **List messages** – Search and paginate with Gmail query syntax (`is:unread`, `from:user@example.com`, etc.).
+- **Get message** – Fetch a single message by ID (metadata or full body, including plain/html parts).
+- **Send message** – Send plain-text email with optional CC/BCC.
+- **List labels** – List all Gmail labels (INBOX, SENT, custom labels).
+- **SMCP-native** – Exposes `--describe` for tool discovery; tools appear as `smcp-gmail__list-messages`, etc.
+- **OAuth2** – Uses Google’s desktop OAuth flow; credentials stored in `token.json` after first sign-in.
+
+---
+
+## Quick start
 
 ```bash
-cp -r /path/to/smcp-gmail /path/to/smcp/plugins/
-chmod +x /path/to/smcp/plugins/smcp-gmail/cli.py
+# 1. Clone and install
+git clone https://github.com/sanctumos/smcp-gmail.git
+cd smcp-gmail
+pip install -r requirements.txt
+
+# 2. Add credentials
+#    Download OAuth client secrets from Google Cloud Console → APIs & Services → Credentials
+#    Save as credentials.json in this directory.
+
+# 3. First run (opens browser to sign in)
+python cli.py list-labels
+
+# 4. Use as SMCP plugin: copy into your SMCP plugins directory
+cp -r . /path/to/smcp/plugins/smcp-gmail
 ```
 
-Or set `MCP_PLUGINS_DIR` to a directory that contains `smcp-gmail` (with `cli.py` inside).
+---
 
-Tools are exposed as:
+## Requirements
 
-- `smcp-gmail__list-messages` – list message IDs (optional query, max results, page token)
-- `smcp-gmail__get-message` – get one message by ID (metadata or full)
-- `smcp-gmail__send-message` – send an email (to, subject, body; optional cc/bcc)
-- `smcp-gmail__list-labels` – list Gmail labels
+- **Python** 3.8 or higher  
+- **Google Cloud project** with Gmail API enabled  
+- **OAuth 2.0 Client ID** (Desktop application) – client secrets downloaded as `credentials.json`
 
-## CLI (standalone)
+---
+
+## Installation
+
+### 1. Install Python dependencies
 
 ```bash
-# Plugin spec for SMCP discovery
+pip install -r requirements.txt
+```
+
+Optional: use a virtual environment:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+### 2. Enable Gmail API and create credentials
+
+1. Open [Google Cloud Console](https://console.cloud.google.com/).
+2. Create or select a project.
+3. Enable the **Gmail API**: [Enable Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com).
+4. Configure the **OAuth consent screen** (e.g. External or Internal, add scopes if needed).
+5. Create **Credentials** → **OAuth 2.0 Client ID** → Application type: **Desktop app**.
+6. Download the JSON and save it as **`credentials.json`** in the smcp-gmail directory (or set `GMAIL_CREDENTIALS_FILE` to its path).
+
+### 3. First authorization
+
+Run any command that uses Gmail (e.g. `python cli.py list-labels`). The first time, a browser window opens for you to sign in and grant access. Tokens are stored in **`token.json`** (or the path in `GMAIL_TOKEN_FILE`).
+
+See [docs/installation.md](docs/installation.md) for step-by-step and screenshots-style guidance.
+
+---
+
+## Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `GMAIL_CREDENTIALS_FILE` | `credentials.json` (in plugin dir) | Path to OAuth client secrets JSON. |
+| `GMAIL_TOKEN_FILE`     | `token.json` (in plugin dir)       | Path to store/load the OAuth token. |
+
+All paths are relative to the current working directory unless absolute. See [docs/configuration.md](docs/configuration.md) for details.
+
+---
+
+## Usage
+
+### As an SMCP plugin
+
+1. Copy or symlink this directory into SMCP’s plugins directory:
+
+   ```bash
+   cp -r /path/to/smcp-gmail /path/to/smcp/plugins/
+   chmod +x /path/to/smcp/plugins/smcp-gmail/cli.py
+   ```
+
+   Or set **`MCP_PLUGINS_DIR`** to a directory that contains a folder named `smcp-gmail` (with `cli.py` inside).
+
+2. Start SMCP. The plugin is discovered automatically; tools are registered with the `smcp-gmail__` prefix.
+
+3. **MCP tool names** (used by AI clients):
+
+   | Tool name | Description |
+   |-----------|-------------|
+   | `smcp-gmail__list-messages` | List message IDs (optional query, max results, page token). |
+   | `smcp-gmail__get-message`   | Get one message by ID (metadata or full body). |
+   | `smcp-gmail__send-message`  | Send an email (to, subject, body; optional cc/bcc). |
+   | `smcp-gmail__list-labels`   | List Gmail labels. |
+
+### Standalone CLI
+
+```bash
+# Plugin spec (JSON) for SMCP discovery
 python cli.py --describe
 
 # List labels
 python cli.py list-labels
 
-# List messages (optional query)
-python cli.py list-messages --query "is:unread" --max-results 5
+# List messages with Gmail search
+python cli.py list-messages --query "is:unread" --max-results 10
 
-# Get message
-python cli.py get-message --message-id "<id>"
+# Get a message (metadata only)
+python cli.py get-message --message-id "<message-id>"
+
+# Get full body (plain + HTML parts)
+python cli.py get-message --message-id "<id>" --format full
 
 # Send email
-python cli.py send-message --to "user@example.com" --subject "Hi" --body "Hello"
+python cli.py send-message --to "user@example.com" --subject "Hello" --body "Hi from smcp-gmail"
 ```
+
+All commands print a single JSON object to stdout (or an error object with an `"error"` key). Exit code is 0 on success, 1 on failure.
+
+---
+
+## Commands reference
+
+| Command | Required arguments | Optional arguments | Description |
+|---------|--------------------|--------------------|-------------|
+| `list-messages` | — | `--user-id`, `--query`, `--max-results`, `--page-token` | List messages; supports Gmail search syntax. |
+| `get-message`   | `--message-id` | `--user-id`, `--format` (minimal \| full \| metadata \| raw) | Fetch one message. |
+| `send-message`  | `--to`, `--subject`, `--body` | `--user-id`, `--cc`, `--bcc` | Send plain-text email. |
+| `list-labels`  | — | `--user-id` | List all labels. |
+
+Example Gmail queries for `--query`: `is:unread`, `from:alice@example.com`, `subject:meeting`, `after:2024/01/01`, `has:attachment`.
+
+Full details: [docs/usage.md](docs/usage.md).
+
+---
 
 ## Testing
 
-Full test suite (unit, integration, coverage ≥80%) requires Gmail API deps installed:
-
 ```bash
-# Optional: use a virtual environment
-python3 -m venv venv
-source venv/bin/activate   # Windows: venv\Scripts\activate
-
 pip install -r requirements-testing.txt
 python run_tests.py
-# Or: pytest tests/unit tests/integration --cov=cli --cov=gmail_client --cov-fail-under=80 --cov-report=term-missing
 ```
 
-- **Unit tests**: `tests/unit/` (cli, gmail_client with mocks).
-- **Integration tests**: `tests/integration/` (CLI subprocess, `--describe`, error contract).
-- **E2E tests**: `tests/e2e/` – skipped unless `GMAIL_E2E=1` and `credentials.json` (or `GMAIL_CREDENTIALS_FILE`) exists. Run with: `pytest -m e2e`.
+- **Unit tests** – `tests/unit/` (CLI and Gmail client with mocks).
+- **Integration tests** – `tests/integration/` (CLI subprocess, `--describe`, error contract).
+- **E2E tests** – `tests/e2e/`; run only when credentials are configured:  
+  `GMAIL_E2E=1 pytest -m e2e`.
 
-Without `google-api-python-client` installed, unit tests that mock the Gmail client are skipped; integration and describe tests still run.
+Coverage target: **80%** (enforced by `run_tests.py` when Gmail API deps are installed). Without Gmail deps, some unit tests are skipped; integration and describe tests still run.
 
-## Env (optional)
+See [docs/development.md](docs/development.md) for more.
 
-- `GMAIL_CREDENTIALS_FILE` – path to OAuth client secrets JSON (default: `credentials.json` in plugin dir).
-- `GMAIL_TOKEN_FILE` – path to store/load token (default: `token.json` in plugin dir).
+---
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [docs/README.md](docs/README.md) | Index of all documentation. |
+| [docs/installation.md](docs/installation.md) | Step-by-step installation and Google Cloud setup. |
+| [docs/usage.md](docs/usage.md) | CLI and MCP usage, all commands and parameters. |
+| [docs/configuration.md](docs/configuration.md) | Environment variables, credentials, and token paths. |
+| [docs/development.md](docs/development.md) | Testing, coverage, and contributing. |
+| [docs/troubleshooting.md](docs/troubleshooting.md) | Common errors and fixes. |
+
+---
+
+## Troubleshooting
+
+- **"Credentials file not found"** – Ensure `credentials.json` exists (or `GMAIL_CREDENTIALS_FILE` is set) in the plugin directory or current working directory.
+- **"Access blocked" / consent screen** – Configure the OAuth consent screen and add the Gmail scopes your app uses.
+- **Token expired** – Delete `token.json` and run again to re-authorize.
+- **403 / Permission denied** – Check that the Gmail API is enabled for your Google Cloud project.
+
+More: [docs/troubleshooting.md](docs/troubleshooting.md).
+
+---
 
 ## License
 
-Same as SMCP / your project.
+Same as SMCP / your project. This repository does not add a separate license file; default to [AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0) if not specified by the parent project.
