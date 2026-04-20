@@ -1,13 +1,10 @@
 # smcp-gmail documentation
 
-Documentation in this directory is licensed under [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/). See [LICENSE-DOCS](../LICENSE-DOCS) in the project root.
+**v3.0+** is **IMAP + SMTP only** (no Gmail REST client in this repo, no in-process OAuth).
 
-| Document | Description |
-|----------|-------------|
-| [installation.md](installation.md) | Step-by-step installation and Google Cloud (Gmail API, OAuth, credentials) setup. |
-| [usage.md](usage.md) | Using the plugin with SMCP and from the CLI; all commands and parameters. |
-| [configuration.md](configuration.md) | Environment variables, credentials file, and token file. |
-| [development.md](development.md) | Running tests, coverage, and contributing. |
-| [troubleshooting.md](troubleshooting.md) | Common errors and how to fix them. |
+| Document | Purpose |
+|----------|---------|
+| [../README.md](../README.md) | Install, env vars, commands, SMCP layout |
+| [IMAP_AGENT_PLUGIN_PLAN.md](IMAP_AGENT_PLUGIN_PLAN.md) | Architecture: personal Gmail + Workspace |
 
-Start with [installation.md](installation.md) for setup, then [usage.md](usage.md) for day-to-day use.
+Legacy Markdown under `installation.md`, `usage.md`, etc. described the **removed** REST + desktop-OAuth plugin; ignore those files until they are deleted or rewritten.

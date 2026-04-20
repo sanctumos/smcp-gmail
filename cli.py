@@ -1,160 +1,155 @@
 #!/usr/bin/env python3
 """
-smcp-gmail – Gmail API plugin for SMCP (Model Context Protocol).
+smcp-gmail — Gmail over IMAP + SMTP for SMCP (agent-safe).
 
-Exposes Gmail operations as MCP tools: list messages, get message, send, list labels.
-
-Copyright (C) 2025 Contributors to the smcp-gmail project.
-This program is free software: you can redistribute it and/or modify it under
-the terms of the GNU Affero General Public License as published by the Free
-Software Foundation, either version 3 of the License, or (at your option)
-any later version. See LICENSE in the project root.
+No Gmail REST API and no in-process OAuth. Provision refresh tokens or app
+passwords or Workspace SA keys outside this process; this CLI only runs mail ops.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
 import sys
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, List
+
+
+def _plugin_dir() -> Path:
+    return Path(__file__).resolve().parent
 
 
 def _describe_spec() -> Dict[str, Any]:
     return {
         "plugin": {
             "name": "smcp-gmail",
-            "version": "1.0.0",
-            "description": "Gmail API plugin: list messages, get message, send email, list labels.",
+            "version": "3.0.0",
+            "description": "Gmail via IMAP+SMTP for agents: mailboxes, UID search (X-GM-RAW), fetch, send. XOAUTH2 from pre-provisioned token JSON, app password, or Workspace SA delegation. No OAuth or browser flows in this plugin.",
         },
         "commands": [
             {
-                "name": "list-messages",
-                "description": "List Gmail message IDs matching an optional query (e.g. from:user@example.com is:unread).",
+                "name": "list-mailboxes",
+                "description": "IMAP LIST mailboxes (Gmail labels as folders).",
+                "parameters": [],
+            },
+            {
+                "name": "search",
+                "description": "UID SEARCH in a folder; optional Gmail raw query (X-GM-RAW) when server supports it.",
                 "parameters": [
-                    {"name": "user_id", "type": "string", "description": "Gmail user (default: me)", "required": False, "default": "me"},
-                    {"name": "query", "type": "string", "description": "Gmail search query", "required": False, "default": None},
-                    {"name": "max_results", "type": "integer", "description": "Max messages to return (default 10)", "required": False, "default": 10},
-                    {"name": "page_token", "type": "string", "description": "Page token for pagination", "required": False, "default": None},
+                    {"name": "folder", "type": "string", "required": False, "default": "INBOX"},
+                    {"name": "gmail_raw_query", "type": "string", "required": False, "default": None},
                 ],
             },
             {
-                "name": "get-message",
-                "description": "Get a single Gmail message by ID (metadata or full body).",
+                "name": "fetch-headers",
+                "description": "UID FETCH selected header fields (BODY.PEEK) for one or more UIDs.",
                 "parameters": [
-                    {"name": "message_id", "type": "string", "description": "Gmail message ID", "required": True, "default": None},
-                    {"name": "user_id", "type": "string", "description": "Gmail user (default: me)", "required": False, "default": "me"},
-                    {"name": "format", "type": "string", "description": "minimal, full, metadata, raw (default: metadata)", "required": False, "default": "metadata"},
+                    {"name": "folder", "type": "string", "required": False, "default": "INBOX"},
+                    {"name": "uids", "type": "string", "required": True, "default": None},
+                ],
+            },
+            {
+                "name": "fetch-raw-peek",
+                "description": "UID FETCH BODY.PEEK[] for one UID (base64 RFC822 chunk, size-capped).",
+                "parameters": [
+                    {"name": "folder", "type": "string", "required": False, "default": "INBOX"},
+                    {"name": "uid", "type": "string", "required": True, "default": None},
                 ],
             },
             {
                 "name": "send-message",
-                "description": "Send an email via Gmail.",
+                "description": "Send plain-text email via SMTP submission (XOAUTH2 or app password).",
                 "parameters": [
-                    {"name": "to", "type": "string", "description": "To address", "required": True, "default": None},
-                    {"name": "subject", "type": "string", "description": "Subject line", "required": True, "default": None},
-                    {"name": "body", "type": "string", "description": "Plain-text body", "required": True, "default": None},
-                    {"name": "user_id", "type": "string", "description": "Gmail user (default: me)", "required": False, "default": "me"},
-                    {"name": "cc", "type": "string", "description": "CC addresses (comma-separated)", "required": False, "default": None},
-                    {"name": "bcc", "type": "string", "description": "BCC addresses (comma-separated)", "required": False, "default": None},
-                ],
-            },
-            {
-                "name": "list-labels",
-                "description": "List Gmail labels for the user.",
-                "parameters": [
-                    {"name": "user_id", "type": "string", "description": "Gmail user (default: me)", "required": False, "default": "me"},
+                    {"name": "to", "type": "string", "required": True, "default": None},
+                    {"name": "subject", "type": "string", "required": True, "default": None},
+                    {"name": "body", "type": "string", "required": True, "default": None},
+                    {"name": "cc", "type": "string", "required": False, "default": None},
+                    {"name": "bcc", "type": "string", "required": False, "default": None},
                 ],
             },
         ],
     }
 
 
+def _ensure_path() -> None:
+    pd = str(_plugin_dir())
+    if pd not in sys.path:
+        sys.path.insert(0, pd)
+
+
 def main() -> None:
+    _ensure_path()
     parser = argparse.ArgumentParser(
-        description="Gmail API plugin for SMCP",
+        description="smcp-gmail — Gmail IMAP/SMTP for SMCP (no in-process OAuth)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "--describe",
         action="store_true",
-        help="Output plugin spec as JSON for SMCP discovery",
+        help="Emit SMCP plugin JSON spec",
     )
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
+    sub = parser.add_subparsers(dest="command")
 
-    # list-messages
-    p_list = subparsers.add_parser("list-messages", help="List messages")
-    p_list.add_argument("--user-id", default="me", help="Gmail user")
-    p_list.add_argument("--query", default=None, help="Gmail search query")
-    p_list.add_argument("--max-results", type=int, default=10, help="Max results")
-    p_list.add_argument("--page-token", default=None, help="Page token")
+    sub.add_parser("list-mailboxes", help="List IMAP mailboxes")
 
-    # get-message
-    p_get = subparsers.add_parser("get-message", help="Get a message")
-    p_get.add_argument("--message-id", required=True, help="Message ID")
-    p_get.add_argument("--user-id", default="me", help="Gmail user")
-    p_get.add_argument("--format", default="metadata", choices=["minimal", "full", "metadata", "raw"], help="Message format")
+    p_s = sub.add_parser("search", help="UID SEARCH")
+    p_s.add_argument("--folder", default="INBOX")
+    p_s.add_argument("--gmail-raw-query", default=None, dest="gmail_raw_query")
 
-    # send-message
-    p_send = subparsers.add_parser("send-message", help="Send an email")
-    p_send.add_argument("--to", required=True, help="To address")
-    p_send.add_argument("--subject", required=True, help="Subject")
-    p_send.add_argument("--body", required=True, help="Body (plain text)")
-    p_send.add_argument("--user-id", default="me", help="Gmail user")
-    p_send.add_argument("--cc", default=None, help="CC addresses")
-    p_send.add_argument("--bcc", default=None, help="BCC addresses")
+    p_fh = sub.add_parser("fetch-headers", help="Fetch headers for UIDs")
+    p_fh.add_argument("--folder", default="INBOX")
+    p_fh.add_argument("--uids", required=True, help="Comma-separated IMAP UIDs")
 
-    # list-labels
-    p_labels = subparsers.add_parser("list-labels", help="List labels")
-    p_labels.add_argument("--user-id", default="me", help="Gmail user")
+    p_fr = sub.add_parser("fetch-raw-peek", help="Fetch raw message PEEK for one UID")
+    p_fr.add_argument("--folder", default="INBOX")
+    p_fr.add_argument("--uid", required=True)
+
+    p_send = sub.add_parser("send-message", help="SMTP send")
+    p_send.add_argument("--to", required=True)
+    p_send.add_argument("--subject", required=True)
+    p_send.add_argument("--body", required=True)
+    p_send.add_argument("--cc", default=None)
+    p_send.add_argument("--bcc", default=None)
 
     args = parser.parse_args()
-
     if args.describe:
         print(json.dumps(_describe_spec()))
-        sys.exit(0)
+        return
 
     if not args.command:
         parser.print_help()
         sys.exit(1)
 
-    from gmail_client import (
-        get_message,
-        list_labels,
-        list_messages,
-        send_message,
-    )
+    from auth_config import load_auth_settings
+    from imap_ops import fetch_headers, fetch_raw_peek, list_mailboxes, search_messages
+    from smtp_ops import send_message
 
     try:
-        if args.command == "list-messages":
-            result = list_messages(
-                user_id=args.user_id,
-                query=args.query,
-                max_results=args.max_results,
-                page_token=args.page_token,
-            )
-        elif args.command == "get-message":
-            result = get_message(
-                message_id=args.message_id,
-                user_id=args.user_id,
-                format=args.format,
-            )
-        elif args.command == "send-message":
-            result = send_message(
-                to=args.to,
-                subject=args.subject,
-                body=args.body,
-                user_id=args.user_id,
-                cc=args.cc,
-                bcc=args.bcc,
-            )
-        elif args.command == "list-labels":
-            result = list_labels(user_id=args.user_id)
-        else:
-            result = {"error": f"Unknown command: {args.command}"}
-
-        print(json.dumps(result))
-        sys.exit(0 if "error" not in result else 1)
-    except FileNotFoundError as e:
+        settings = load_auth_settings()
+    except Exception as e:
         print(json.dumps({"error": str(e)}))
         sys.exit(1)
+
+    try:
+        if args.command == "list-mailboxes":
+            out = list_mailboxes(settings)
+        elif args.command == "search":
+            out = search_messages(
+                settings,
+                folder=args.folder,
+                gmail_raw_query=args.gmail_raw_query,
+            )
+        elif args.command == "fetch-headers":
+            uids: List[str] = [x.strip() for x in args.uids.split(",") if x.strip()]
+            out = fetch_headers(settings, args.folder, uids)
+        elif args.command == "fetch-raw-peek":
+            out = fetch_raw_peek(settings, args.folder, args.uid)
+        elif args.command == "send-message":
+            out = send_message(settings, args.to, args.subject, args.body, cc=args.cc, bcc=args.bcc)
+        else:
+            print(json.dumps({"error": f"unknown command {args.command}"}))
+            sys.exit(1)
+        print(json.dumps(out))
     except Exception as e:
         print(json.dumps({"error": str(e)}))
         sys.exit(1)

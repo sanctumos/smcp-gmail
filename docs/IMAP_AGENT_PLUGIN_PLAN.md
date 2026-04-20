@@ -2,7 +2,7 @@
 
 This document is the canonical plan for **agent-safe Gmail access** over **IMAP + SMTP**, replacing the assumption that an MCP/SMCP tool process can run **interactive Desktop OAuth** (`run_local_server`). It covers **personal Gmail (@gmail.com / consumer Google Account)** first, then **Google Workspace (“Google for business”)**.
 
-**Repository deliverable:** `smcp-gmail-imap/` — a second SMCP plugin directory (sibling layout to any existing `smcp-gmail` REST plugin) with its own `cli.py`, tests, and docs. **This plugin only implements the runtime lane** — it **never** runs OAuth authorization, device codes, loopback redirects, or any flow that implies a browser or interactive consent. **All token minting happens outside this codebase** (your laptop script, secret manager, CI job, admin tooling — not shipped here).
+**Repository deliverable:** the **`smcp-gmail`** repo root (`cli.py` + IMAP/SMTP modules). **This codebase only implements the runtime lane** — it **never** runs OAuth authorization, device codes, loopback redirects, or any flow that implies a browser or interactive consent. **All token minting happens outside this repo** (your laptop script, secret manager, CI job, admin tooling — not shipped here). The legacy Gmail **REST** + desktop-OAuth implementation was **removed in v3.0.0**.
 
 ---
 
@@ -21,7 +21,7 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 
 - **Gmail REST API** parity (drafts, watch/Pub/Sub, granular metadata-only REST) — out of scope for this plugin; link to legacy REST plugin if needed.
 - **Full calendar / Drive** — not this plugin.
-- **Any OAuth consent, device, or browser UX inside `smcp-gmail-imap`** — explicitly rejected (including no `bootstrap-oauth` subcommand).
+- **Any OAuth consent, device, or browser UX inside this repository** — explicitly rejected (including no `bootstrap-oauth` subcommand).
 
 ---
 
@@ -43,7 +43,7 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 ### Provisioning lane — **not implemented in this repo**
 
 - Operators obtain **Google authorized-user JSON** (`Credentials.to_json()` shape: `refresh_token`, `token_uri`, `client_id`, `client_secret`, scopes) using **their own** one-off tooling, or they use **app passwords**, or Workspace admins configure **service account + DWD**.
-- That work may involve browsers, phones, or admin consoles — **elsewhere**. None of it is a subcommand of `smcp-gmail-imap/cli.py`.
+- That work may involve browsers, phones, or admin consoles — **elsewhere**. None of it is a subcommand of this repo’s `cli.py`.
 
 ### Runtime lane — **this plugin only**
 
@@ -54,7 +54,7 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 
 ### Secrets on disk
 
-- **gitignore:** `**/gmail_imap_token.json`, `**/token.json` under plugin dir, `credentials.json` (client secrets) — already partially covered at repo root; extend for `smcp-gmail-imap/`.
+- **gitignore:** `gmail_imap_token.json`, `token.json`, `credentials.json` at repo root as needed.
 - **chmod:** document `600` for token files on Unix.
 
 ---
@@ -119,29 +119,23 @@ Two distinct deployments — document both; implement **B1** before **B2** unles
 ## 6. Implementation map (files)
 
 ```
-smcp-gmail-imap/
-  __init__.py
-  cli.py                 # argparse: --describe, subcommands (no OAuth)
-  auth_config.py         # resolve env → AuthSettings dataclass
-  oauth_refresh.py      # refresh access token from user OAuth token file
-  xoauth2.py             # build XOAUTH2 inner bytes / SMTP base64
-  imap_ops.py            # list_mailboxes, search, fetch
-  smtp_ops.py            # send_message
-  workspace_auth.py      # service account + with_subject() path
-  requirements.txt       # google-auth, requests (stdlib imap/smtp)
-tests/
-  unit/
-    test_xoauth2.py
-    test_auth_config.py
-  integration/
-    (describe smoke lives in repo root tests/integration/)
+smcp-gmail/   (repo root)
+  cli.py
+  auth_config.py
+  oauth_refresh.py
+  xoauth2.py
+  token_provider.py
+  imap_ops.py
+  smtp_ops.py
+  workspace_auth.py
+  requirements.txt
+tests/…
 ```
 
-**Root repo changes**
+**Docs**
 
 - `docs/IMAP_AGENT_PLUGIN_PLAN.md` (this file)
-- `README.md` section: “Use `smcp-gmail-imap` for agents; REST plugin is legacy desktop-OAuth shaped”
-- `.gitignore` entries for `smcp-gmail-imap/gmail_imap_token.json`, etc.
+- `.gitignore` includes `gmail_imap_token.json`, `credentials.json`, etc.
 
 ---
 
@@ -155,19 +149,18 @@ tests/
 
 ## 8. Rollout & deprecation narrative
 
-- **Do not delete** REST `smcp-gmail` in the same release as IMAP MVP; **mark REST plugin** as **legacy** for agent deployments in README.
-- **SMCP operators:** add **`smcp-gmail-imap`** as a separate plugin directory in `MCP_PLUGINS_DIR`; tools are prefixed `smcp-gmail-imap__…` from `--describe`.
+- **v3.0.0:** REST + `gmail_client.py` + desktop OAuth **removed** from this repository. Operators use **this** `smcp-gmail` tree only (IMAP/SMTP). Tool names in `--describe` are **`smcp-gmail__list-mailboxes`**, etc. (same prefix, different commands than v1 REST).
 
 ---
 
 ## 9. Execution checklist (Otto)
 
 - [x] Author this plan (`docs/IMAP_AGENT_PLUGIN_PLAN.md`).
-- [x] Implement `smcp-gmail-imap` package (auth, imap, smtp, cli) — **no in-repo OAuth / device / browser flows**.
-- [x] Implement Phase B2 Workspace service-account path (`workspace_auth.py` + `GMAIL_USE_SERVICE_ACCOUNT`).
-- [x] Unit + integration tests; `smcp-gmail-imap/run_tests.py` + root `tests/integration/test_smcp_gmail_imap_describe.py`.
+- [x] IMAP implementation at repo root (auth, imap, smtp, cli) — **no in-repo OAuth / device / browser flows**.
+- [x] Workspace service-account path (`workspace_auth.py` + `GMAIL_USE_SERVICE_ACCOUNT`).
+- [x] Unit + integration tests; root `run_tests.py`.
 - [x] README + CHANGELOG; gitignore; push `sanctumos/smcp-gmail`.
-- [x] Mirror tree under `projects/sanctum/smcp-gmail` (sync copy with sanctumos).
+- [x] **v3.0.0:** Removed REST `gmail_client.py` and `smcp-gmail-imap/` subdirectory; single plugin tree.
 
 ---
 

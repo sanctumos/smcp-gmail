@@ -3,9 +3,9 @@ venv/
 .venv/
 credentials.json
 token.json
-smcp-gmail-imap/gmail_imap_token.json
-smcp-gmail-imap/.venv/
+gmail_imap_token.json
 .coverage
 htmlcov/
 *.pyc
 __pycache__/
+.pytest_cache/

@@ -1,7 +1,6 @@
-"""Unit tests for CLI."""
+"""Unit tests for IMAP-based cli."""
 import json
 import sys
-from io import StringIO
 from unittest.mock import patch
 
 import pytest
@@ -10,131 +9,48 @@ import cli
 
 
 class TestDescribeSpec:
-    """Test _describe_spec output."""
-
-    def test_has_plugin_and_commands(self):
+    def test_plugin_name_and_commands(self):
         spec = cli._describe_spec()
-        assert "plugin" in spec
         assert spec["plugin"]["name"] == "smcp-gmail"
-        assert "commands" in spec
-        assert isinstance(spec["commands"], list)
-
-    def test_commands_have_required_fields(self):
-        spec = cli._describe_spec()
-        for cmd in spec["commands"]:
-            assert "name" in cmd
-            assert "description" in cmd
-            assert "parameters" in cmd
-            assert isinstance(cmd["parameters"], list)
-
-    def test_list_messages_command_present(self):
-        spec = cli._describe_spec()
-        names = [c["name"] for c in spec["commands"]]
-        assert "list-messages" in names
-        assert "get-message" in names
-        assert "send-message" in names
-        assert "list-labels" in names
+        names = {c["name"] for c in spec["commands"]}
+        assert names == {
+            "list-mailboxes",
+            "search",
+            "fetch-headers",
+            "fetch-raw-peek",
+            "send-message",
+        }
 
 
 class TestMain:
-    """Test main() with various argv and mocks."""
-
-    def test_describe_prints_json_and_exits_zero(self, capsys):
+    def test_describe_prints_json(self, capsys):
         with patch.object(sys, "argv", ["cli.py", "--describe"]):
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 0
-        out, err = capsys.readouterr()
-        spec = json.loads(out)
-        assert spec["plugin"]["name"] == "smcp-gmail"
-        assert len(spec["commands"]) >= 4
+            cli.main()
+        out, _ = capsys.readouterr()
+        assert json.loads(out)["plugin"]["name"] == "smcp-gmail"
 
-    def test_no_command_prints_help_and_exits_one(self, capsys):
+    def test_no_command_prints_help(self, capsys):
         with patch.object(sys, "argv", ["cli.py"]):
-            with pytest.raises(SystemExit) as exc_info:
+            with pytest.raises(SystemExit) as ei:
                 cli.main()
-            assert exc_info.value.code == 1
-        out, err = capsys.readouterr()
-        assert "usage" in out.lower() or "Gmail" in out
+            assert ei.value.code == 1
 
-    def test_list_messages_success(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", [
-            "cli.py", "list-messages",
-            "--user-id", "me", "--query", "is:unread", "--max-results", "3",
-        ]), patch("gmail_client.list_messages") as mock_list:
-            mock_list.return_value = {"messages": [{"id": "1"}], "nextPageToken": None, "resultSizeEstimate": 1}
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 0
+    def test_list_mailboxes_success(self, capsys):
+        with patch.object(sys, "argv", ["cli.py", "list-mailboxes"]), patch(
+            "auth_config.load_auth_settings", return_value=object()
+        ), patch("imap_ops.list_mailboxes") as mock_list:
+            mock_list.return_value = {"mailboxes": [{"name": "INBOX"}]}
+            cli.main()
         out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert data["messages"] == [{"id": "1"}]
-        mock_list.assert_called_once_with(user_id="me", query="is:unread", max_results=3, page_token=None)
+        assert json.loads(out)["mailboxes"][0]["name"] == "INBOX"
 
-    def test_get_message_success(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", ["cli.py", "get-message", "--message-id", "msg123", "--format", "full"]), \
-             patch("gmail_client.get_message") as mock_get:
-            mock_get.return_value = {"id": "msg123", "snippet": "Hi"}
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 0
-        out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert data["id"] == "msg123"
-        mock_get.assert_called_once_with(message_id="msg123", user_id="me", format="full")
-
-    def test_send_message_success(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", [
-            "cli.py", "send-message",
-            "--to", "a@b.com", "--subject", "Subj", "--body", "Body text",
-        ]), patch("gmail_client.send_message") as mock_send:
-            mock_send.return_value = {"id": "sent1"}
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 0
-        out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert data["id"] == "sent1"
-        mock_send.assert_called_once_with(
-            to="a@b.com", subject="Subj", body="Body text",
-            user_id="me", cc=None, bcc=None,
-        )
-
-    def test_list_labels_success(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", ["cli.py", "list-labels"]), \
-             patch("gmail_client.list_labels") as mock_labels:
-            mock_labels.return_value = {"labels": [{"id": "INBOX", "name": "INBOX"}]}
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 0
-        out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert data["labels"] == [{"id": "INBOX", "name": "INBOX"}]
-        mock_labels.assert_called_once_with(user_id="me")
-
-    def test_file_not_found_prints_json_error_and_exits_one(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", ["cli.py", "list-labels"]), \
-             patch("gmail_client.list_labels", side_effect=FileNotFoundError("No credentials")):
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 1
-        out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert "error" in data
-        assert "credentials" in data["error"].lower() or "No" in data["error"]
-
-    def test_generic_exception_prints_json_error_and_exits_one(self, capsys):
-        pytest.importorskip("google.auth")
-        with patch.object(sys, "argv", ["cli.py", "list-labels"]), \
-             patch("gmail_client.list_labels", side_effect=RuntimeError("API down")):
-            with pytest.raises(SystemExit) as exc_info:
-                cli.main()
-            assert exc_info.value.code == 1
-        out, _ = capsys.readouterr()
-        data = json.loads(out)
-        assert data["error"] == "API down"
+    def test_search_success(self, capsys):
+        with patch.object(
+            sys, "argv", ["cli.py", "search", "--folder", "INBOX", "--gmail-raw-query", "is:unread"]
+        ), patch("auth_config.load_auth_settings", return_value=object()), patch(
+            "imap_ops.search_messages"
+        ) as mock_s:
+            mock_s.return_value = {"uids": ["1", "2"], "truncated": False}
+            cli.main()
+        data = json.loads(capsys.readouterr().out)
+        assert data["uids"] == ["1", "2"]

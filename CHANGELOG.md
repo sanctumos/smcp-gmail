@@ -7,25 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [3.0.0] - 2026-04-20
+
+### Removed (breaking)
+
+- **Entire Gmail REST stack** — `gmail_client.py`, Google API client dependencies, `list-messages` / `get-message` / `list-labels` REST commands, desktop OAuth in this repo.
+- **`smcp-gmail-imap/` subdirectory** — IMAP implementation now **is** the repo root (`cli.py` + `imap_ops.py`, `smtp_ops.py`, etc.).
+
 ### Added
 
-- **`smcp-gmail-imap/`** — agent-oriented Gmail plugin: IMAP (`imap.gmail.com:993`) + SMTP submission (`smtp.gmail.com:465`), **XOAUTH2** from **externally provisioned** authorized-user token JSON (no in-plugin OAuth), optional **app password**, and **Google Workspace** domain-wide delegation via service account (`GMAIL_USE_SERVICE_ACCOUNT`, `GMAIL_SERVICE_ACCOUNT_JSON`, `GMAIL_DELEGATED_USER`). SMCP tools: `list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message`.
-- **`docs/IMAP_AGENT_PLUGIN_PLAN.md`** — full architecture plan (personal Gmail + Workspace).
-- **Tests** — `smcp-gmail-imap/tests/` + `python3 smcp-gmail-imap/run_tests.py`; root integration smoke for `--describe`.
+- **IMAP + SMTP plugin** as the only implementation: `list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message`; **XOAUTH2** from externally provisioned token JSON, optional **app password**, **Workspace SA + DWD**.
+- **`docs/IMAP_AGENT_PLUGIN_PLAN.md`** — architecture (personal + Workspace).
 
-### Removed
+### Changed
 
-- **`bootstrap-oauth` / device OAuth** — dropped from `smcp-gmail-imap`; this plugin must not own any consent or browser-adjacent flow.
+- **`--describe`**: plugin version **3.0.0**; tool surface is IMAP-only (different from v1 REST).
+- **Dependencies:** `google-auth`, `requests` only (`requirements.txt`).
+- **`run_tests.py`**: coverage over IMAP modules; `cov-fail-under` 40 until IMAP mocks expand.
 
-### Fixed
+## [2.x] — superseded
 
-- **Unit tests** — `tests/unit/test_cli.py` success paths now expect `SystemExit(0)` from `cli.main()`, matching `sys.exit` behavior.
+Prior releases shipped the REST + OAuth desktop client; they are **not** supported in-tree after 3.0.0.
 
 ## [1.0.0] - 2026-02-26
 
 ### Added
 
-- **Gmail SMCP plugin** – CLI and MCP tools for Gmail API.
+- **Gmail SMCP plugin (REST, superseded by 3.0.0)** – CLI and MCP tools for Gmail API.
   - `list-messages` – list message IDs with optional query, pagination (`--query`, `--max-results`, `--page-token`).
   - `get-message` – fetch a single message by ID (metadata or full body, `--format` minimal/full/metadata/raw).
   - `send-message` – send plain-text email (`--to`, `--subject`, `--body`; optional `--cc`, `--bcc`).
@@ -51,5 +61,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-[Unreleased]: https://github.com/sanctumos/smcp-gmail/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/sanctumos/smcp-gmail/compare/v3.0.0...HEAD
+[3.0.0]: https://github.com/sanctumos/smcp-gmail/releases/tag/v3.0.0
 [1.0.0]: https://github.com/sanctumos/smcp-gmail/releases/tag/v1.0.0
