@@ -171,4 +171,41 @@ tests/…
 
 ---
 
-*Last updated: 2026-04-20 — plan revised: zero OAuth flows in-plugin.*
+## 11. Downstream — mailbox master DB, people-only passes, Venice (personal project)
+
+This section is **not** part of the SMCP Gmail plugin contract; it documents how **IMAP-ingested mail** feeds a separate **CRM / contact-reconstruction** pipeline (whole primary mailbox; **`mark.alex.hopkins` excluded** except tiny experiments).
+
+### 11.1 Multi-pass shape
+
+1. **Index pass:** ingest essentially all folders/messages into a **master DB** (headers + bodies capped + Gmail metadata when `X-GM-EXT-1` exists). No LLM.
+2. **People / junk gate:** deterministic rules first (`List-Id`, `Precedence`, `List-Unsubscribe`, obvious `noreply@`, receipts/shipping patterns, Spam folder), then LLM only on a **gray band**.
+3. **Enrichment passes:** for rows that survive as likely humans, re-open **source messages / threads** and extract structured fields (employer, role, topics) for export (e.g. DSC CRM).
+
+### 11.2 Venice — smoke harness
+
+- **Script:** `projects/venice-ai-sdk/scripts/mail_triage_venice_smoke.py`
+  - **Live:** exercises triage JSON (gold labels) + one enrichment JSON across candidate models; writes `scripts/mail_triage_venice_smoke_last.json`; prints `RECOMMENDED_*` lines when all HTTP 200 and scorers pass.
+  - **Offline:** `python3 scripts/mail_triage_venice_smoke.py --offline` validates parsers/scorers only (CI-safe).
+  - **Auth:** exit **3** if any call returns **401** (bad/missing key). Replace placeholder keys in `.env` with a real key from [Venice API settings](https://venice.ai/settings/api), then re-run live smoke to **override** the locked defaults below.
+
+### 11.3 Locked model choices (defaults until a successful live smoke)
+
+**Pricing reference:** [Venice API pricing](https://docs.venice.ai/overview/pricing) (USD per 1M tokens).
+
+| Lane | Venice model `id` | Role |
+|------|-------------------|------|
+| **Embeddings / clustering** | `text-embedding-bge-m3` | Cheap private embeddings for “maybe same person” hints (~\$0.15 / 1M tokens). |
+| **Primary triage LLM** | `mistral-small-3-2-24b-instruct` | Default for **JSON bucket labels** on gray-band snippets: strong instruction-following vs cost (Mistral’s own Small 3.2 card shows clear IF / Arena-Hard gains over 3.1). |
+| **High-volume triage alt** | `qwen3-5-9b` | Lowest chat $/1M on the Venice table; use when prompts stay tiny and JSON is schema-validated / repaired. |
+| **Enrichment (threads)** | `deepseek-v3.2` | Best **quality-per-dollar** for longer excerpts + structured extraction on the Venice price sheet (`Private` lane). |
+| **Optional second opinion** | `grok-41-fast` | Only if two cheap models disagree on list vs person; keep off the hot path to protect the **~\$0.50/day** budget. |
+
+**Selection rule after a good API key exists:** among triage models that **PASS** the gold JSON checks in `mail_triage_venice_smoke.py`, pick the one with **lowest `total_tokens`**, then **lowest latency** as tie-breaker. If none pass, keep **Mistral** as primary and widen prompts / temperature before spending up-stack.
+
+### 11.4 Live smoke status (workspace)
+
+- **2026-04-19:** Live calls returned **401 Authentication failed** — `projects/venice-ai-sdk/.env` held a **16-character placeholder**, not a dashboard API key. **Defaults in §11.3 remain authoritative** until a successful live run writes fresh metrics to `mail_triage_venice_smoke_last.json`.
+
+---
+
+*Last updated: 2026-04-19 — §11 mailbox/Venice pipeline + smoke harness; live Venice auth pending real key.*
