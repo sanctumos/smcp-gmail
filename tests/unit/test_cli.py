@@ -64,7 +64,9 @@ class TestMain:
             "--user-id", "me", "--query", "is:unread", "--max-results", "3",
         ]), patch("gmail_client.list_messages") as mock_list:
             mock_list.return_value = {"messages": [{"id": "1"}], "nextPageToken": None, "resultSizeEstimate": 1}
-            cli.main()
+            with pytest.raises(SystemExit) as exc_info:
+                cli.main()
+            assert exc_info.value.code == 0
         out, _ = capsys.readouterr()
         data = json.loads(out)
         assert data["messages"] == [{"id": "1"}]
@@ -75,7 +77,9 @@ class TestMain:
         with patch.object(sys, "argv", ["cli.py", "get-message", "--message-id", "msg123", "--format", "full"]), \
              patch("gmail_client.get_message") as mock_get:
             mock_get.return_value = {"id": "msg123", "snippet": "Hi"}
-            cli.main()
+            with pytest.raises(SystemExit) as exc_info:
+                cli.main()
+            assert exc_info.value.code == 0
         out, _ = capsys.readouterr()
         data = json.loads(out)
         assert data["id"] == "msg123"
@@ -88,7 +92,9 @@ class TestMain:
             "--to", "a@b.com", "--subject", "Subj", "--body", "Body text",
         ]), patch("gmail_client.send_message") as mock_send:
             mock_send.return_value = {"id": "sent1"}
-            cli.main()
+            with pytest.raises(SystemExit) as exc_info:
+                cli.main()
+            assert exc_info.value.code == 0
         out, _ = capsys.readouterr()
         data = json.loads(out)
         assert data["id"] == "sent1"
@@ -102,7 +108,9 @@ class TestMain:
         with patch.object(sys, "argv", ["cli.py", "list-labels"]), \
              patch("gmail_client.list_labels") as mock_labels:
             mock_labels.return_value = {"labels": [{"id": "INBOX", "name": "INBOX"}]}
-            cli.main()
+            with pytest.raises(SystemExit) as exc_info:
+                cli.main()
+            assert exc_info.value.code == 0
         out, _ = capsys.readouterr()
         data = json.loads(out)
         assert data["labels"] == [{"id": "INBOX", "name": "INBOX"}]

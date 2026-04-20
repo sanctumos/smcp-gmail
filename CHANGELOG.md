@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added
+
+- **`smcp-gmail-imap/`** — agent-oriented Gmail plugin: IMAP (`imap.gmail.com:993`) + SMTP submission (`smtp.gmail.com:465`), **XOAUTH2**, OAuth **device-flow** bootstrap (`bootstrap-oauth`), optional **app password** mode, and **Google Workspace** domain-wide delegation via service account (`GMAIL_USE_SERVICE_ACCOUNT`, `GMAIL_SERVICE_ACCOUNT_JSON`, `GMAIL_DELEGATED_USER`). SMCP tools: `list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message`.
+- **`docs/IMAP_AGENT_PLUGIN_PLAN.md`** — full architecture plan (personal Gmail + Workspace).
+- **Tests** — `smcp-gmail-imap/tests/` + `python3 smcp-gmail-imap/run_tests.py`; root integration smoke for `--describe`.
+
+### Fixed
+
+- **Unit tests** — `tests/unit/test_cli.py` success paths now expect `SystemExit(0)` from `cli.main()`, matching `sys.exit` behavior.
 
 ## [1.0.0] - 2026-02-26
 
