@@ -186,26 +186,30 @@ This section is **not** part of the SMCP Gmail plugin contract; it documents how
 - **Script:** `projects/venice-ai-sdk/scripts/mail_triage_venice_smoke.py`
   - **Live:** exercises triage JSON (gold labels) + one enrichment JSON across candidate models; writes `scripts/mail_triage_venice_smoke_last.json`; prints `RECOMMENDED_*` lines when all HTTP 200 and scorers pass.
   - **Offline:** `python3 scripts/mail_triage_venice_smoke.py --offline` validates parsers/scorers only (CI-safe).
-  - **Auth:** exit **3** if any call returns **401** (bad/missing key). Replace placeholder keys in `.env` with a real key from [Venice API settings](https://venice.ai/settings/api), then re-run live smoke to **override** the locked defaults below.
+  - **Auth:** exit **3** if any call returns **401** (wrong key class). **Chat completions require an inference-class key** (see §11.4). The script auto-loads `VENICE_IMAGE_ANALYSIS_API_KEY` from `projects/athena-venice-usage/venice_key.md` when `VENICE_API_KEY` in `.env` is a short placeholder.
 
-### 11.3 Locked model choices (defaults until a successful live smoke)
+### 11.3 Locked model choices (from live smoke, 2026-04-19)
 
 **Pricing reference:** [Venice API pricing](https://docs.venice.ai/overview/pricing) (USD per 1M tokens).
 
 | Lane | Venice model `id` | Role |
 |------|-------------------|------|
 | **Embeddings / clustering** | `text-embedding-bge-m3` | Cheap private embeddings for “maybe same person” hints (~\$0.15 / 1M tokens). |
-| **Primary triage LLM** | `mistral-small-3-2-24b-instruct` | Default for **JSON bucket labels** on gray-band snippets: strong instruction-following vs cost (Mistral’s own Small 3.2 card shows clear IF / Arena-Hard gains over 3.1). |
-| **High-volume triage alt** | `qwen3-5-9b` | Lowest chat $/1M on the Venice table; use when prompts stay tiny and JSON is schema-validated / repaired. |
-| **Enrichment (threads)** | `deepseek-v3.2` | Best **quality-per-dollar** for longer excerpts + structured extraction on the Venice price sheet (`Private` lane). |
-| **Optional second opinion** | `grok-41-fast` | Only if two cheap models disagree on list vs person; keep off the hot path to protect the **~\$0.50/day** budget. |
+| **Primary triage LLM** | `google-gemma-3-27b-it` | **Measured winner** on the smoke harness: passes gold JSON + **lowest `total_tokens`** (~1188 on the fixed triage prompt). |
+| **Triage alternate** | `mistral-small-3-2-24b-instruct` | Also **PASS**; slightly higher tokens (~1255) but **fast wall time** — good default if you prefer Mistral’s instruction-tuned behavior over Gemma on your own samples. |
+| **Triage alternate 2** | `openai-gpt-oss-120b` | **PASS**; higher tokens/latency than Gemma/Mistral on the harness — keep as a third opinion, not the hot path. |
+| **Do not use for this triage prompt (failed harness)** | `qwen3-5-9b`, `nvidia-nemotron-3-nano-30b-a3b` | `qwen3-5-9b` did not emit parseable JSON on the test even at 512 completion tokens; **Nemotron** mis-bucketed the personal mail snippet. Revisit only if prompts change and you re-smoke. |
+| **Enrichment (default)** | `mistral-small-3-2-24b-instruct` | **Measured lowest tokens + latency** on the single-thread enrichment JSON task (~1085–1086 tokens, ~1.6s). |
+| **Enrichment (heavy / optional)** | `deepseek-v3.2` | **PASS** when given enough output headroom (~773 completion tokens, ~62s in one run) — use for **hard threads** where Mistral’s JSON is thin; not the default on a **~\$0.50/day** budget. |
+| **Optional second opinion** | `grok-41-fast` | Not in the last smoke batch; keep as a discretionary tie-breaker if you expand the harness. |
 
-**Selection rule after a good API key exists:** among triage models that **PASS** the gold JSON checks in `mail_triage_venice_smoke.py`, pick the one with **lowest `total_tokens`**, then **lowest latency** as tie-breaker. If none pass, keep **Mistral** as primary and widen prompts / temperature before spending up-stack.
+**Selection rule:** re-run `mail_triage_venice_smoke.py` after prompt/schema changes; among triage models that **PASS**, prefer **lowest `total_tokens`**, then **lowest latency**.
 
-### 11.4 Live smoke status (workspace)
+### 11.4 Credentials (read once — do not use the admin line for chat)
 
-- **2026-04-19:** Live calls returned **401 Authentication failed** — `projects/venice-ai-sdk/.env` held a **16-character placeholder**, not a dashboard API key. **Defaults in §11.3 remain authoritative** until a successful live run writes fresh metrics to `mail_triage_venice_smoke_last.json`.
+- **Inference / chat / embeddings:** `VENICE_IMAGE_ANALYSIS_API_KEY` in `projects/athena-venice-usage/venice_key.md` (same file labels a separate **admin** key for billing — that admin key is **not** the one Venice chat expects).
+- **`projects/venice-ai-sdk/.env`:** may keep a short placeholder; the smoke script **falls through** to `venice_key.md` when `VENICE_API_KEY` is too short, so local runs still work without hand-exporting the literal each time.
 
 ---
 
-*Last updated: 2026-04-19 — §11 mailbox/Venice pipeline + smoke harness; live Venice auth pending real key.*
+*Last updated: 2026-04-19 — §11 Venice locks updated from live smoke (inference key + Gemma/Mistral/DeepSeek results).*
