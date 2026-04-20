@@ -177,6 +177,8 @@ This section is **not** part of the SMCP Gmail plugin contract; it documents how
 
 ### 11.1 Multi-pass shape
 
+**Reference app (this workspace + NewDev):** private repo [actuallyrizzn/mailbox-master](https://github.com/actuallyrizzn/mailbox-master) — CLI `mailbox-master` (ingest → SQLite → `classify-rules` → `triage-venice`).
+
 1. **Index pass:** ingest essentially all folders/messages into a **master DB** (headers + bodies capped + Gmail metadata when `X-GM-EXT-1` exists). No LLM.
 2. **People / junk gate:** deterministic rules first (`List-Id`, `Precedence`, `List-Unsubscribe`, obvious `noreply@`, receipts/shipping patterns, Spam folder), then LLM only on a **gray band**.
 3. **Enrichment passes:** for rows that survive as likely humans, re-open **source messages / threads** and extract structured fields (employer, role, topics) for export (e.g. DSC CRM).
