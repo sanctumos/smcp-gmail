@@ -2,20 +2,17 @@
 """
 smcp-gmail-imap — Gmail over IMAP + SMTP for SMCP (agent-safe).
 
-Runtime: uses refresh token file + client secrets (XOAUTH2), app password, or
-Workspace service-account delegation. No browser in normal tool commands.
-
-Bootstrap: `bootstrap-oauth` uses OAuth device flow (RFC 8628).
+This process never starts OAuth, device codes, or browsers. It only reads secrets
+and refresh tokens you provision out-of-band (vault, CI, laptop script elsewhere).
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 def _plugin_dir() -> Path:
@@ -26,8 +23,8 @@ def _describe_spec() -> Dict[str, Any]:
     return {
         "plugin": {
             "name": "smcp-gmail-imap",
-            "version": "2.0.0",
-            "description": "Gmail via IMAP+SMTP for agents: mailboxes, UID search (X-GM-RAW), fetch, send. OAuth device bootstrap; runtime uses token file or Workspace SA.",
+            "version": "2.0.1",
+            "description": "Gmail via IMAP+SMTP for agents: mailboxes, UID search (X-GM-RAW), fetch, send. Runtime only: XOAUTH2 from pre-provisioned token JSON, app password, or Workspace service-account delegation. No OAuth or browser flows in this plugin.",
         },
         "commands": [
             {
@@ -70,14 +67,6 @@ def _describe_spec() -> Dict[str, Any]:
                     {"name": "bcc", "type": "string", "required": False, "default": None},
                 ],
             },
-            {
-                "name": "bootstrap-oauth",
-                "description": "One-time device OAuth; writes gmail_imap_token.json. Not for SMCP tool loops.",
-                "parameters": [
-                    {"name": "client_secrets", "type": "string", "required": True, "default": None},
-                    {"name": "out_token", "type": "string", "required": False, "default": None},
-                ],
-            },
         ],
     }
 
@@ -91,7 +80,7 @@ def _ensure_path() -> None:
 def main() -> None:
     _ensure_path()
     parser = argparse.ArgumentParser(
-        description="smcp-gmail-imap — Gmail IMAP/SMTP for SMCP",
+        description="smcp-gmail-imap — Gmail IMAP/SMTP for SMCP (no in-process OAuth)",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
@@ -101,7 +90,7 @@ def main() -> None:
     )
     sub = parser.add_subparsers(dest="command")
 
-    p_m = sub.add_parser("list-mailboxes", help="List IMAP mailboxes")
+    sub.add_parser("list-mailboxes", help="List IMAP mailboxes")
 
     p_s = sub.add_parser("search", help="UID SEARCH")
     p_s.add_argument("--folder", default="INBOX")
@@ -122,20 +111,6 @@ def main() -> None:
     p_send.add_argument("--cc", default=None)
     p_send.add_argument("--bcc", default=None)
 
-    p_boot = sub.add_parser("bootstrap-oauth", help="Device OAuth → token file")
-    p_boot.add_argument(
-        "--client-secrets",
-        required=True,
-        dest="client_secrets",
-        help="Path to Google OAuth client JSON (Desktop)",
-    )
-    p_boot.add_argument(
-        "--out-token",
-        default=None,
-        dest="out_token",
-        help="Output token path (default: gmail_imap_token.json in plugin dir)",
-    )
-
     args = parser.parse_args()
     if args.describe:
         print(json.dumps(_describe_spec()))
@@ -144,14 +119,6 @@ def main() -> None:
     if not args.command:
         parser.print_help()
         sys.exit(1)
-
-    if args.command == "bootstrap-oauth":
-        from bootstrap_device import bootstrap_from_client_secrets
-
-        out = Path(args.out_token).expanduser() if args.out_token else _plugin_dir() / "gmail_imap_token.json"
-        bootstrap_from_client_secrets(Path(args.client_secrets).expanduser(), out)
-        print(json.dumps({"ok": True, "token_file": str(out)}))
-        return
 
     from auth_config import load_auth_settings
     from imap_ops import fetch_headers, fetch_raw_peek, list_mailboxes, search_messages

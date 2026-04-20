@@ -15,7 +15,6 @@ if __name__ == "__main__":
         "token_provider",
         "oauth_refresh",
         "workspace_auth",
-        "bootstrap_device",
         "imap_ops",
         "smtp_ops",
         "cli",

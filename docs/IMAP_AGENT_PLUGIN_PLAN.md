@@ -2,7 +2,7 @@
 
 This document is the canonical plan for **agent-safe Gmail access** over **IMAP + SMTP**, replacing the assumption that an MCP/SMCP tool process can run **interactive Desktop OAuth** (`run_local_server`). It covers **personal Gmail (@gmail.com / consumer Google Account)** first, then **Google Workspace (“Google for business”)**.
 
-**Repository deliverable:** `smcp-gmail-imap/` — a second SMCP plugin directory (sibling layout to any existing `smcp-gmail` REST plugin) with its own `cli.py`, tests, and docs. Agents use **runtime secrets only**; humans use **bootstrap** once per identity.
+**Repository deliverable:** `smcp-gmail-imap/` — a second SMCP plugin directory (sibling layout to any existing `smcp-gmail` REST plugin) with its own `cli.py`, tests, and docs. **This plugin only implements the runtime lane** — it **never** runs OAuth authorization, device codes, loopback redirects, or any flow that implies a browser or interactive consent. **All token minting happens outside this codebase** (your laptop script, secret manager, CI job, admin tooling — not shipped here).
 
 ---
 
@@ -10,8 +10,8 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 
 ### Goals
 
-- **Headless / agentic:** SMCP tool invocations must **never** open a browser or bind a loopback OAuth server.
-- **Personal Gmail first:** OAuth2 **refresh token** minted **out-of-band** (bootstrap CLI), then **XOAUTH2** on IMAP (993) and SMTP submission (465/587).
+- **Headless / agentic:** SMCP tool invocations must **never** open a browser, print a verification URL for this process, start a local HTTP OAuth callback, or run RFC 8628 device authorization **inside this plugin**.
+- **Personal Gmail first:** OAuth2 **refresh token** (and client id/secret) exist as **pre-provisioned artifacts**; runtime uses **XOAUTH2** on IMAP (993) and SMTP submission (465/587) with `google.auth` token refresh only.
 - **Workspace second:** Support **domain-wide delegated service accounts** impersonating a user mailbox (admin-provisioned), with the same IMAP/SMTP surface where Google allows it.
 - **Optional simplicity path:** **App password** (16-char) for IMAP/SMTP **only** where Google account policy still permits it — documented, not the strategic default.
 - **Gmail-native search on IMAP:** Use **`X-GM-RAW`** when `X-GM-EXT-1` is advertised (Gmail search syntax in `UID SEARCH`).
@@ -21,7 +21,7 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 
 - **Gmail REST API** parity (drafts, watch/Pub/Sub, granular metadata-only REST) — out of scope for this plugin; link to legacy REST plugin if needed.
 - **Full calendar / Drive** — not this plugin.
-- **GUI or browser-in-tool** — explicitly rejected.
+- **Any OAuth consent, device, or browser UX inside `smcp-gmail-imap`** — explicitly rejected (including no `bootstrap-oauth` subcommand).
 
 ---
 
@@ -38,21 +38,19 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 
 ---
 
-## 3. Security model: bootstrap vs runtime
+## 3. Security model: provisioning (out of band) vs runtime (this plugin)
 
-### Bootstrap lane (human or CI secret generation)
+### Provisioning lane — **not implemented in this repo**
 
-- **Command:** `python cli.py bootstrap-oauth` (device authorization grant, RFC 8628) **or** future: paste authorization code.
-- **Output:** Writes **`gmail_imap_token.json`** (or path from `GMAIL_IMAP_TOKEN_FILE`) containing refresh token and client metadata in **Google `Credentials.to_json()`**-compatible shape.
-- **May** print URL and user code; **may** require human on a phone or laptop **once**.
-- **Never** imported by default when SMCP runs `list-mailboxes` etc.
+- Operators obtain **Google authorized-user JSON** (`Credentials.to_json()` shape: `refresh_token`, `token_uri`, `client_id`, `client_secret`, scopes) using **their own** one-off tooling, or they use **app passwords**, or Workspace admins configure **service account + DWD**.
+- That work may involve browsers, phones, or admin consoles — **elsewhere**. None of it is a subcommand of `smcp-gmail-imap/cli.py`.
 
-### Runtime lane (agents / SMCP)
+### Runtime lane — **this plugin only**
 
-- Loads **token file** + **client secret JSON path** (or inline client id/secret envs).
-- **Refreshes access token** with `google.auth.transport.requests.Request` when expired/near expiry.
-- Builds **XOAUTH2** initial client response (Base64 of `user=…\x01auth=Bearer …\x01\x01`).
-- **No** `input()` except in explicit bootstrap subcommand.
+- Loads **token file** and/or **client metadata** from env paths.
+- **Refreshes access token** with `google.auth.transport.requests.Request` when expired (no human).
+- Builds **XOAUTH2** for IMAP/SMTP.
+- **No** `input()`, no `webbrowser`, no `InstalledAppFlow`, no device code endpoint calls.
 
 ### Secrets on disk
 
@@ -66,23 +64,23 @@ This document is the canonical plan for **agent-safe Gmail access** over **IMAP 
 ### Authentication modes
 
 1. **`oauth_refresh` (default)**  
-   - Env: `GMAIL_ADDRESS`, `GMAIL_IMAP_TOKEN_FILE` (refresh token JSON), `GMAIL_OAUTH_CLIENT_SECRETS` (path to Desktop client `credentials.json`) **or** `GMAIL_OAUTH_CLIENT_ID` + `GMAIL_OAUTH_CLIENT_SECRET`.  
+   - Env: `GMAIL_ADDRESS`, `GMAIL_IMAP_TOKEN_FILE` (authorized-user JSON), optional `GMAIL_OAUTH_CLIENT_SECRETS` / `GMAIL_OAUTH_CLIENT_ID` + `GMAIL_OAUTH_CLIENT_SECRET` if not embedded in the token file.  
    - Runtime refreshes access token; IMAP/SMTP use XOAUTH2.
 
 2. **`app_password` (optional)**  
    - Env: `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`.  
-   - IMAP/SMTP: plain `LOGIN` / `AUTH PLAIN` as supported by `imaplib`/`smtplib`.  
+   - IMAP/SMTP: `LOGIN` / plain auth as supported by `imaplib`/`smtplib`.  
    - Document: requires 2SV + app passwords enabled; blocked for Advanced Protection, etc.
 
 ### SMCP tool / CLI command surface (MVP)
 
 | Command | Purpose |
 |---------|---------|
-| `list-mailboxes` | `LIST` + RFC6154 special-use; return name + `\HasNoChildren` etc. |
+| `list-mailboxes` | `LIST` + RFC6154 special-use; return name + flags |
 | `search` | `SELECT` folder (default `INBOX`), `UID SEARCH` + optional `X-GM-RAW` query, cap max UIDs |
-| `fetch` | `UID FETCH` with `BODY.PEEK[]` or `BODY.PEEK[HEADER]`, size cap, optional max bytes |
+| `fetch-headers` | `UID FETCH` selective headers (`BODY.PEEK`) |
+| `fetch-raw-peek` | `UID FETCH` `BODY.PEEK[]`, size-capped, base64 in JSON |
 | `send-message` | SMTP submit plain text (attachments = later) |
-| `bootstrap-oauth` | Device flow; writes token file |
 
 ### Limits & safety knobs (env)
 
@@ -99,14 +97,14 @@ Two distinct deployments — document both; implement **B1** before **B2** unles
 
 ### B1 — Per-user OAuth (same as consumer)
 
-- Each Workspace user has a **refresh token** (bootstrap per mailbox).  
-- **Admin policies** may restrict IMAP or “less secure” paths; **XOAUTH2** is the supported approach.  
+- Each Workspace user has a **refresh token** stored in JSON **provisioned outside this plugin** for that mailbox.  
+- **Admin policies** may restrict IMAP; **XOAUTH2** is the supported approach.  
 - **No code fork** beyond docs (“Workspace: ensure IMAP enabled for users”).
 
 ### B2 — Service account + domain-wide delegation (DWD)
 
-- **When:** shared automation, delegated access without per-user interactive consent, admin owns trust boundary.  
-- **Requires:** Workspace admin configures DWD for the service client id with scope **`https://mail.google.com/`** (or narrower if Google allows for IMAP — follow admin doc).  
+- **When:** shared automation, delegated access without per-user refresh tokens, admin owns trust boundary.  
+- **Requires:** Workspace admin configures DWD for the service client id with scope **`https://mail.google.com/`** (follow admin doc).  
 - **Runtime:** `google.oauth2.service_account.Credentials.from_service_account_file(...).with_subject(user@domain.com)` → access token → **same XOAUTH2** string for IMAP/SMTP as that user.  
 - **Env:** `GMAIL_USE_SERVICE_ACCOUNT=1`, `GMAIL_SERVICE_ACCOUNT_JSON`, `GMAIL_DELEGATED_USER` (email to impersonate).  
 - **Caveats:** DWD is powerful; rotation, audit, and least-scope are admin responsibilities. Some accounts may still block IMAP at the org level.
@@ -123,23 +121,20 @@ Two distinct deployments — document both; implement **B1** before **B2** unles
 ```
 smcp-gmail-imap/
   __init__.py
-  cli.py                 # argparse: --describe, subcommands
+  cli.py                 # argparse: --describe, subcommands (no OAuth)
   auth_config.py         # resolve env → AuthSettings dataclass
   oauth_refresh.py      # refresh access token from user OAuth token file
-  xoauth2.py             # build XOAUTH2 blob (base64)
+  xoauth2.py             # build XOAUTH2 inner bytes / SMTP base64
   imap_ops.py            # list_mailboxes, search, fetch
   smtp_ops.py            # send_message
-  bootstrap_device.py    # RFC8628 device authorization against Google
   workspace_auth.py      # service account + with_subject() path
-  requirements.txt       # imaplib/stdlib + google-auth + requests
+  requirements.txt       # google-auth, requests (stdlib imap/smtp)
 tests/
   unit/
     test_xoauth2.py
     test_auth_config.py
-    test_imap_ops_mock.py
-    test_bootstrap_device_mock.py
   integration/
-    test_cli_describe.py
+    (describe smoke lives in repo root tests/integration/)
 ```
 
 **Root repo changes**
@@ -152,7 +147,7 @@ tests/
 
 ## 7. Testing strategy
 
-- **Unit:** XOAUTH2 string format; auth config resolution; IMAP command assembly with **mocked** `imaplib.IMAP4_SSL` (patch `imaplib.IMAP4_SSL` in tests).
+- **Unit:** XOAUTH2 string format; auth config resolution; IMAP command assembly with **mocked** `imaplib.IMAP4_SSL` (future).
 - **Integration:** `cli.py --describe` subprocess (no secrets).
 - **Live / optional:** `GMAIL_IMAP_LIVE=1` pytest marker — skipped in CI; requires real token file on developer machine.
 
@@ -168,7 +163,7 @@ tests/
 ## 9. Execution checklist (Otto)
 
 - [x] Author this plan (`docs/IMAP_AGENT_PLUGIN_PLAN.md`).
-- [x] Implement `smcp-gmail-imap` package (Phases A: auth, imap, smtp, bootstrap, cli).
+- [x] Implement `smcp-gmail-imap` package (auth, imap, smtp, cli) — **no in-repo OAuth / device / browser flows**.
 - [x] Implement Phase B2 Workspace service-account path (`workspace_auth.py` + `GMAIL_USE_SERVICE_ACCOUNT`).
 - [x] Unit + integration tests; `smcp-gmail-imap/run_tests.py` + root `tests/integration/test_smcp_gmail_imap_describe.py`.
 - [x] README + CHANGELOG; gitignore; push `sanctumos/smcp-gmail`.
@@ -178,9 +173,9 @@ tests/
 
 ## 10. Open questions (answer as you deploy)
 
-- **OAuth client type for device flow:** Google Cloud “Desktop” vs “TV and limited input” — if device code endpoint rejects client, create a **TV** OAuth client for bootstrap only (documented in troubleshooting).
+- **Where to mint refresh tokens:** Your choice entirely outside this repo (custom script, internal admin app, etc.). This plugin only documents the **JSON shape** and env vars.
 - **Verification:** `https://mail.google.com/` may trigger **OAuth verification** for public apps — internal / testing users mitigate for personal use.
 
 ---
 
-*Last updated: 2026-04-20 — Otto execution against this plan.*
+*Last updated: 2026-04-20 — plan revised: zero OAuth flows in-plugin.*

@@ -31,7 +31,10 @@ def load_credentials(
             with open(token_path, "w", encoding="utf-8") as f:
                 f.write(creds.to_json())
     if not creds.token:
-        raise RuntimeError("No access token after refresh; re-run bootstrap-oauth.")
+        raise RuntimeError(
+            "No access token after refresh; token file may be invalid or revoked — "
+            "re-provision OAuth credentials out-of-band."
+        )
     return creds
 
 

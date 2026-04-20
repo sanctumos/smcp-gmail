@@ -9,9 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **`smcp-gmail-imap/`** — agent-oriented Gmail plugin: IMAP (`imap.gmail.com:993`) + SMTP submission (`smtp.gmail.com:465`), **XOAUTH2**, OAuth **device-flow** bootstrap (`bootstrap-oauth`), optional **app password** mode, and **Google Workspace** domain-wide delegation via service account (`GMAIL_USE_SERVICE_ACCOUNT`, `GMAIL_SERVICE_ACCOUNT_JSON`, `GMAIL_DELEGATED_USER`). SMCP tools: `list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message`.
+- **`smcp-gmail-imap/`** — agent-oriented Gmail plugin: IMAP (`imap.gmail.com:993`) + SMTP submission (`smtp.gmail.com:465`), **XOAUTH2** from **externally provisioned** authorized-user token JSON (no in-plugin OAuth), optional **app password**, and **Google Workspace** domain-wide delegation via service account (`GMAIL_USE_SERVICE_ACCOUNT`, `GMAIL_SERVICE_ACCOUNT_JSON`, `GMAIL_DELEGATED_USER`). SMCP tools: `list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message`.
 - **`docs/IMAP_AGENT_PLUGIN_PLAN.md`** — full architecture plan (personal Gmail + Workspace).
 - **Tests** — `smcp-gmail-imap/tests/` + `python3 smcp-gmail-imap/run_tests.py`; root integration smoke for `--describe`.
+
+### Removed
+
+- **`bootstrap-oauth` / device OAuth** — dropped from `smcp-gmail-imap`; this plugin must not own any consent or browser-adjacent flow.
 
 ### Fixed
 

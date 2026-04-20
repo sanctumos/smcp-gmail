@@ -1,57 +1,49 @@
 # smcp-gmail-imap
 
-Gmail over **IMAP + SMTP** for **SMCP** and other MCP hosts, designed for **agents and headless servers**: runtime uses a **refresh token** (or **Workspace service-account delegation**), not an interactive browser inside tool calls.
+Gmail over **IMAP + SMTP** for **SMCP** and other MCP hosts. **This plugin never runs OAuth, device codes, loopback servers, or any browser flow.** It only consumes credentials you place on disk or in the environment.
 
-## Personal Gmail (XOAUTH2)
+## How you get credentials (not this repo)
 
-1. Install deps: `pip install -r requirements.txt` (from this directory).
-2. **Bootstrap once** (can run on your laptop; prints URL + code):
+Pick one path **outside** this plugin, then deploy the resulting secrets to the agent host:
 
-   ```bash
-   export GMAIL_ADDRESS='you@gmail.com'
-   python3 cli.py bootstrap-oauth --client-secrets /path/to/credentials.json
-   ```
+| Mode | You provision |
+|------|----------------|
+| **XOAUTH2** | A Google **authorized user** JSON (contains `refresh_token`, `client_id`, `client_secret`, `token_uri`, scope `https://mail.google.com/`) — e.g. from a one-off script on your laptop, `gcloud auth application-default login` + export pattern, or your secret manager’s generator. |
+| **App password** | `GMAIL_APP_PASSWORD` (where Google still allows it for the account). |
+| **Workspace DWD** | Service account JSON + admin domain-wide delegation + `GMAIL_DELEGATED_USER`. |
 
-   Writes `gmail_imap_token.json` here (override with `--out-token`). Google Cloud OAuth client must allow **device authorization** (Desktop client usually works; if not, create a **TV and limited input** client for bootstrap only).
+This repository intentionally does **not** ship a token-minting CLI.
 
-3. **Agent runtime** env:
+## Runtime environment
 
-   - `GMAIL_ADDRESS` — mailbox for `From:` / SASL user (same as bootstrap).
-   - `GMAIL_IMAP_TOKEN_FILE` — path to `gmail_imap_token.json` if not in this directory.
-   - If the token file lacks `client_id` / `client_secret`, set `GMAIL_OAUTH_CLIENT_SECRETS` or the individual env vars.
+**XOAUTH2 (personal Gmail typical):**
 
-4. SMCP: point `MCP_PLUGINS_DIR` at a parent of this folder named `smcp-gmail-imap` (or symlink). Tools are prefixed `smcp-gmail-imap__` per `--describe`.
+- `GMAIL_ADDRESS` — mailbox (SASL `user=` and SMTP From).
+- `GMAIL_IMAP_TOKEN_FILE` — path to authorized-user JSON (default: `./gmail_imap_token.json` next to `cli.py`).
+- If the JSON lacks `client_id` / `client_secret`, set `GMAIL_OAUTH_CLIENT_SECRETS` or `GMAIL_OAUTH_CLIENT_ID` + `GMAIL_OAUTH_CLIENT_SECRET`.
 
-## App password (optional)
-
-If your account supports it:
+**App password:**
 
 ```bash
 export GMAIL_ADDRESS='you@gmail.com'
 export GMAIL_APP_PASSWORD='xxxx xxxx xxxx xxxx'
 ```
 
-## Google Workspace (service account + DWD)
-
-Admin must enable **domain-wide delegation** for your service account client and authorize scope `https://mail.google.com/`.
+**Workspace (service account + delegation):**
 
 ```bash
 export GMAIL_USE_SERVICE_ACCOUNT=1
 export GMAIL_SERVICE_ACCOUNT_JSON=/path/to/sa.json
 export GMAIL_DELEGATED_USER=user@yourdomain.com
-# GMAIL_ADDRESS optional; defaults to delegated user
 ```
+
+## SMCP
+
+Point `MCP_PLUGINS_DIR` at a parent of the folder **`smcp-gmail-imap`** (with `cli.py` inside). Tools are named per `--describe` (prefix `smcp-gmail-imap__…`).
 
 ## Commands
 
-| Command | Role |
-|--------|------|
-| `list-mailboxes` | IMAP LIST |
-| `search` | UID SEARCH; `--gmail-raw-query` uses `X-GM-RAW` when server supports it |
-| `fetch-headers` | UID FETCH selective headers (peek) |
-| `fetch-raw-peek` | UID FETCH `BODY.PEEK[]` (base64, size-capped) |
-| `send-message` | SMTP SSL submission |
-| `bootstrap-oauth` | Device OAuth — **not** for automated tool loops |
+`list-mailboxes`, `search`, `fetch-headers`, `fetch-raw-peek`, `send-message` — see `--describe` JSON.
 
 ## Tests
 
@@ -59,6 +51,6 @@ export GMAIL_DELEGATED_USER=user@yourdomain.com
 python3 run_tests.py
 ```
 
-## Canonical plan
+## Plan
 
-See repository [`docs/IMAP_AGENT_PLUGIN_PLAN.md`](../docs/IMAP_AGENT_PLUGIN_PLAN.md).
+[`docs/IMAP_AGENT_PLUGIN_PLAN.md`](../docs/IMAP_AGENT_PLUGIN_PLAN.md)

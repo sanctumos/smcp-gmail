@@ -150,7 +150,8 @@ def load_auth_settings() -> AuthSettings:
     if not token_path.is_file():
         raise FileNotFoundError(
             f"OAuth token file not found: {token_path}. "
-            "Run: python3 cli.py bootstrap-oauth (on any machine), or set GMAIL_IMAP_TOKEN_FILE."
+            "Provision a Google authorized-user JSON (refresh_token + client metadata) "
+            "out-of-band and set GMAIL_IMAP_TOKEN_FILE; this plugin does not run OAuth."
         )
     if not cid or not csec:
         raise ValueError(

@@ -2,7 +2,7 @@
 
 **Gmail API plugin for [SMCP](https://github.com/sanctumos/smcp)** (Model Context Protocol). Exposes Gmail as MCP tools so AI clients can list messages, read, send, and manage labels—without writing Gmail API code.
 
-**For headless / agent-only deployments**, use the sibling plugin **`smcp-gmail-imap/`** (IMAP + SMTP, XOAUTH2, OAuth **device** bootstrap, optional Workspace service-account delegation). See [`docs/IMAP_AGENT_PLUGIN_PLAN.md`](docs/IMAP_AGENT_PLUGIN_PLAN.md) and `smcp-gmail-imap/README.md`. The original REST + desktop-OAuth plugin remains for interactive / API workflows.
+**For headless / agent-only deployments**, use the sibling plugin **`smcp-gmail-imap/`** (IMAP + SMTP, XOAUTH2 from **pre-provisioned** token JSON, optional app password, optional Workspace service-account delegation — **no OAuth or browser flows in the plugin**). See [`docs/IMAP_AGENT_PLUGIN_PLAN.md`](docs/IMAP_AGENT_PLUGIN_PLAN.md) and `smcp-gmail-imap/README.md`. The original REST + desktop-OAuth plugin remains for interactive / API workflows.
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPLv3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
