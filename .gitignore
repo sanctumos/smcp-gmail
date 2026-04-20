@@ -1,6 +1,8 @@
 tmp/
 venv/
 .venv/
+credentials.json
+token.json
 .coverage
 htmlcov/
 *.pyc
